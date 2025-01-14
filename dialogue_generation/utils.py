@@ -3,8 +3,8 @@ import json
 import torch
 from torch import nn
 
-url = r"https://api.mit-spider.alibaba-inc.com/chatgpt/api/ask"
-header = {"Authorization": "Bearer eyJ0eXAiOiJqd3QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6IjI2NjYxOCIsInBhc3N3b3JkIjoiMjY2NjE4MTIzIiwiZXhwIjoxOTkwNzU1Njk4fQ.uBrgKnYcu5i-5O-vyBlxNy9rdnmP1wPwnttGAqyz_bI",
+url = r"Your own chatrobot api here"
+header = {"Authorization": "Your own api key here",
         "content-type": "application/json"}
 
 # should be json format, one-time call for one query
@@ -16,7 +16,7 @@ data = json.dumps({"query":"Can magnets pick up a penny?",
 # print(r.text)
 
 class ChatGPTWrapper():
-    def __init__(self, url: str=r"https://api.mit-spider.alibaba-inc.com/chatgpt/api/ask", headers: dict={"Authorization": "Bearer eyJ0eXAiOiJqd3QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6IjI2NjYxOCIsInBhc3N3b3JkIjoiMjY2NjE4MTIzIiwiZXhwIjoxOTkwNzU1Njk4fQ.uBrgKnYcu5i-5O-vyBlxNy9rdnmP1wPwnttGAqyz_bI", 
+    def __init__(self, url: str=r"Your own chatrobot api here", headers: dict={"Authorization": "Your own api key here", 
     "content-type": "application/json"}, model: str="gpt-3.5-turbo-0301"):
         self.url = url
         self.headers = headers
