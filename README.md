@@ -12,3 +12,15 @@ We first derive patient's profile from public medical corpus (https://github.com
 Profile - Contains personal information such as preference etc.
 
 Dialogue - Contains multi-round dialogue that generated via self-chat.
+
+## Training
+
+### Pre-training 
+```
+sbatch run_pretraining.sh
+```
+
+### Fine-tuning
+```
+torchrun python mem_llm train.py
+```
