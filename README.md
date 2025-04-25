@@ -22,5 +22,5 @@ sbatch run_pretraining.sh
 
 ### Fine-tuning
 ```
-torchrun python mem_llm train.py
+torchrun python mem_llm/train.py
 ```
