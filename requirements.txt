@@ -1,0 +1,10 @@
+torch>=2.0.0
+transformers>=4.30.0
+peft>=0.4.0
+sentence-transformers>=2.2.0
+openai>=1.0.0
+evaluate
+rouge-score
+python-Levenshtein
+tqdm
+numpy

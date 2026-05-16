@@ -1,116 +1,133 @@
-import requests
+"""
+Utility classes for MaLP dialogue generation.
+
+Provides:
+- ChatGPTWrapper: Interface to OpenAI-compatible chat APIs for dialogue simulation
+- ReWriter: Rewrites queries for augmentation
+- Identifier: Judges semantic equivalence between phrases
+- Summarizer: Summarizes dialogue content
+"""
+
+import os
 import json
 import torch
 from torch import nn
 
-url = r"Your own chatrobot api here"
-header = {"Authorization": "Your own api key here",
-        "content-type": "application/json"}
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
 
-# should be json format, one-time call for one query
-prompt = "{0}, {1}".format()
-data = json.dumps({"query":"Can magnets pick up a penny?",
-                   "conversation_id":"a3eedc5a-7dd8-49d5-8024-8be023f625b1"})
 
-# r = requests.request("POST", url, headers=header, data=data)
-# print(r.text)
+class ChatGPTWrapper:
+    """Wrapper for OpenAI-compatible chat completion API.
 
-class ChatGPTWrapper():
-    def __init__(self, url: str=r"Your own chatrobot api here", headers: dict={"Authorization": "Your own api key here", 
-    "content-type": "application/json"}, model: str="gpt-3.5-turbo-0301"):
-        self.url = url
-        self.headers = headers
-        self.isMulti = False # denotes if this is multi-round conversation
+    Used for dialogue generation (self-chat simulation) and evaluation.
+
+    Args:
+        model (str): Model identifier. Default: "gpt-4.1-mini".
+        api_key (str): API key. Defaults to OPENAI_API_KEY env variable.
+        base_url (str): API base URL. Defaults to OPENAI_BASE_URL env variable.
+    """
+
+    def __init__(self, model: str = "gpt-4.1-mini", api_key: str = None,
+                 base_url: str = None):
         self.model = model
+        if OPENAI_AVAILABLE:
+            self.client = OpenAI(
+                api_key=api_key or os.environ.get("OPENAI_API_KEY"),
+                base_url=base_url or os.environ.get("OPENAI_BASE_URL", None),
+            )
+        else:
+            raise ImportError(
+                "openai package not installed. Install with: pip install openai"
+            )
 
     def obtain_response(self, messages):
-        playload = self.obtain_playload(messages)
+        """Send messages to the chat API and return the response object.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys.
+
+        Returns:
+            The API response content string.
+        """
         try:
-            response = requests.request("POST", self.url, headers=self.headers, data=playload)
-            if response.status_code==200:
-                return response
-            else:
-                return self.obain_repsone(messages)
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            return response.choices[0].message.content
         except Exception as e:
-            return r'{"Error":"Connection Error, please check your network and settings"}'
+            print(f"[ChatGPTWrapper] API Error: {e}")
+            return ""
 
-    def obtain_answer(self, messages):
-        # r could be str due to exceptions
-        r = self.obtain_response(messages)
-        if isinstance(r, str):
-            return "Error Networking, check your network"
-        else:
-            text = json.loads(r.text)
-            # print(text["data"]["messages"][0]["content"])
-            try:
-                answer = text["data"]["response"][0]["content"]
-            except Exception as e:
-                answer = str(text)
-            return answer
+    def obtain_answer(self, messages) -> str:
+        """Send messages to the chat API and return the response.
 
-    def obtain_playload(self, messages):
-        # placeholder, further parse input data
-        if isinstance(messages, list):
-            # print("Reach Here 1")
-            playload = json.dumps({'model': self.model, 'messages': messages})
-        else:
-            print("Please transform the messages into list form")
-            playload = json.dumps({'model': self.model, 'messages': "Invalid messages"})
-        return playload
+        Args:
+            messages: Either a list of message dicts with 'role' and 'content',
+                     or a string query.
 
-    # convId no longer avaliable
-    # def obtain_convId(self):
-    #     return self.convIds
+        Returns:
+            str: The assistant's response content.
+        """
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+        return self.obtain_response(messages)
 
 
-# rewrite prompts
+# Rewrite prompts
 class ReWriter(nn.Module):
+    """Rewrites a query while preserving its meaning."""
+
     def __init__(self, engine):
+        super().__init__()
         self.engine = engine
         self.prompt = r"Please Rewrite this question in terms of the same meaning"
 
     def rewrite(self, x):
-        text = self.prompt+":"+x
-        rewritten_text = self.engine.obtain_answer(text)
+        text = self.prompt + ":" + x
+        messages = [{"role": "user", "content": text}]
+        rewritten_text = self.engine.obtain_answer(messages)
         return rewritten_text
 
-# judge if usable
+
+# Judge if usable
 class Identifier(nn.Module):
+    """Judges whether two phrases share the same meaning."""
+
     def __init__(self, engine):
+        super().__init__()
         self.engine = engine
         self.prompt = r"Please check if these two phrase share the same meaning, answer 'Yes' or 'No' only"
 
     def check_answer(self, x1, x2):
         text = self.prompt + ":" + x1 + ";" + x2
-        answer = self.engine.obtain_answer(text)
+        messages = [{"role": "user", "content": text}]
+        answer = self.engine.obtain_answer(messages)
         return answer
 
-# summarize the learned knowledge
-class Summarizer():
+
+# Summarize the learned knowledge
+class Summarizer:
+    """Summarizes learned knowledge from dialogue context."""
+
     def __init__(self, engine):
         self.engine = engine
-        self.prompt = r"Please list the common-sense knowledge and user-specific knowledge (including user dialogue preference) item by item."
+        self.prompt = (
+            r"Please list the common-sense knowledge and user-specific knowledge "
+            r"(including user dialogue preference) item by item."
+        )
 
-    def summarize(self):
-        summarization = self.engine.obtain_answer(self.prompt)
+    def summarize(self, dialogue: str = "") -> str:
+        if dialogue:
+            text = f"{self.prompt}\n\nDialogue:\n{dialogue}"
+        else:
+            text = self.prompt
+        messages = [{"role": "user", "content": text}]
+        summarization = self.engine.obtain_answer(messages)
         return summarization
-
-# cgw = ChatGPTWrapper()   
-# print("---------------Original Generation-------------")
-# print("Question: Can magnets pick up a penny?")
-# text = cgw.obtain_answer(data)
-# print(text)
-# print("---------------Generation with Prompt-------------")
-# x_with_prompt = json.dumps({"query":"Can magnets pick up a penny? Assume the penny is made of copper, copper is not magnetic."})
-# text = cgw.obtain_answer(x_with_prompt)
-# print(text)
-# print("---------------Regenerate with Rewritten Input-------------")
-# rewriter = ReWriter(cgw)
-# identifier = Identifier(cgw)
-# rewritten_text = rewriter.rewrite("Can magnets pick up a penny? Assume the penny is made of copper, copper is not magnetic.")
-# print("rewritten text: {0}".format(rewritten_text))
-# is_same = identifier.check_answer("Can magnets pick up a penny? Penny is made of copper, copper is not magnetic", rewritten_text)
-# print("Is the rewritten text sharing the same meaning as previous?---{0}".format(is_same))
-# x_rewrite = json.dumps({"query":rewritten_text})
-# text = cgw.obtain_answer(x_rewrite)
-# print(text)
